@@ -37,16 +37,91 @@ const FALLBACK_UNIT_DATA = {
   'e3': { name: 'e3', size: '2,000 sq ft', availability: 'Occupied', amenities: 'Executive package' },
 };
 
-// Camera controller - no movement, just basic orbit controls
+// Enhanced Camera controller with smooth animations
 const CameraController: React.FC<{
   selectedUnit: string | null;
-}> = () => {
+}> = ({ selectedUnit }) => {
+  const { camera } = useThree();
   const orbitControlsRef = useRef<any>(null);
+  
+  // Animation state
+  const [isAnimating, setIsAnimating] = useState(false);
+  const animationProgress = useRef(0);
+  const animationStart = useRef<{
+    distance: number;
+    target: THREE.Vector3;
+  } | null>(null);
 
-  // Better initial camera settings - flipped 180 degrees and closer
-  const defaultTarget = new THREE.Vector3(0, 0, 0);
+  // Target states
+  const targetDistance = 12; // Reset zoom distance
+  const targetFocalPoint = new THREE.Vector3(0, 0, 0); // Always center
 
-  // No camera movement logic - just basic orbit controls
+  // Smooth animation when unit is selected
+  useEffect(() => {
+    if (selectedUnit && orbitControlsRef.current) {
+      const controls = orbitControlsRef.current;
+      
+      // Store initial state for animation
+      const currentDistance = camera.position.distanceTo(controls.target);
+      animationStart.current = {
+        distance: currentDistance,
+        target: controls.target.clone()
+      };
+      
+      // Start animation
+      animationProgress.current = 0;
+      setIsAnimating(true);
+    }
+  }, [selectedUnit, camera]);
+
+  // Animation frame loop
+  useFrame((state, delta) => {
+    if (isAnimating && animationStart.current && orbitControlsRef.current) {
+      const controls = orbitControlsRef.current;
+      
+      // Smooth easing function
+      const easeInOutCubic = (t: number): number => {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      };
+      
+      // Update animation progress
+      animationProgress.current += delta * 1.0; // 1 second duration
+      const progress = Math.min(animationProgress.current, 1);
+      const easedProgress = easeInOutCubic(progress);
+      
+      // Get current camera direction (preserve rotation)
+      const currentDirection = new THREE.Vector3();
+      camera.getWorldDirection(currentDirection);
+      currentDirection.normalize();
+      
+      // Interpolate distance
+      const startDistance = animationStart.current.distance;
+      const currentDistance = THREE.MathUtils.lerp(startDistance, targetDistance, easedProgress);
+      
+      // Interpolate focal point
+      const currentTarget = new THREE.Vector3().lerpVectors(
+        animationStart.current.target,
+        targetFocalPoint,
+        easedProgress
+      );
+      
+      // Set new camera position maintaining direction
+      const newPosition = currentTarget.clone().sub(currentDirection.multiplyScalar(currentDistance));
+      camera.position.copy(newPosition);
+      
+      // Update controls target
+      controls.target.copy(currentTarget);
+      controls.update();
+      
+      // End animation
+      if (progress >= 1) {
+        setIsAnimating(false);
+        animationStart.current = null;
+        animationProgress.current = 0;
+      }
+    }
+  });
+
   return (
     <OrbitControls
       ref={orbitControlsRef}
@@ -54,8 +129,8 @@ const CameraController: React.FC<{
       enableZoom={true}
       enableRotate={true}
       minDistance={3}
-      maxDistance={25} // Reduced max distance so users don't get lost
-      target={defaultTarget}
+      maxDistance={25}
+      target={[0, 0, 0]}
       dampingFactor={0.05}
       enableDamping={true}
       rotateSpeed={0.8}
