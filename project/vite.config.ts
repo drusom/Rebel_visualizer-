@@ -5,6 +5,17 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ command }) => {
   const config = {
     plugins: [react()],
+    server: {
+      host: true, // Expose on local network
+      port: 5173, // Default Vite port
+      proxy: {
+        // Proxy API calls to backend during development
+        '/api': {
+          target: 'http://localhost:8080',
+          changeOrigin: true,
+        },
+      },
+    },
     optimizeDeps: {
       exclude: ['lucide-react'],
     },
@@ -14,11 +25,9 @@ export default defineConfig(({ command }) => {
     base: '/', // Default base path for local development
   };
 
-  // Only set base path for production builds (GitHub Pages)
-  // During local development, keep base as '/' so assets load correctly
-  // This ensures models load from /threejs-visualizer-/ in production
+  // For production builds, use GitHub Pages path
   if (command === 'build') {
-    config.base = '/threejs-visualizer-/';
+    config.base = '/Rebel_visualizer-/'; // Updated for new repo name
   }
 
   return config;
